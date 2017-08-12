@@ -1,0 +1,664 @@
+  !*********************************************************** 
+  !
+  ! Copyright (c) 2013, ABB
+  ! All rights reserved.
+  !
+  ! Redistribution and use in source and binary forms, with
+  ! or without modification, are permitted provided that 
+  ! the following conditions are met:
+  !
+  !   * Redistributions of source code must retain the 
+  !     above copyright notice, this list of conditions 
+  !     and the following disclaimer.
+  !   * Redistributions in binary form must reproduce the 
+  !     above copyright notice, this list of conditions 
+  !     and the following disclaimer in the documentation 
+  !     and/or other materials provided with the 
+  !     distribution.
+  !   * Neither the name of ABB nor the names of its 
+  !     contributors may be used to endorse or promote 
+  !     products derived from this software without 
+  !     specific prior written permission.
+  !
+  ! THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+  ! ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+  ! WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+  ! IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+  ! INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+  ! BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+  ! OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+  ! LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+  ! OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+  ! OF THE POSSIBILITY OF SUCH DAMAGE.
+  !
+  !***********************************************************
+
+%%%
+  VERSION:1
+  LANGUAGE:ENGLISH
+%%%
+
+MODULE PPAMAIN
+  !***********************************************************
+  !
+  ! File: PMppa360_IRC5.prg
+  !
+  ! $Revision: \main\pm_3.00_iter1\8 $
+  !
+  ! Description
+  !   This is the main program for a pick and place 
+  !   application.
+  !
+  ! Copyright (c) ABB Automation Technology Products 2002.
+  ! All rights reserved
+  !
+  !***********************************************************
+  
+  !***********************************************************
+  !
+  ! Module: PPAMAIN
+  !
+  ! Description
+  !   This is the main program module for a pick and 
+  !   place application. 
+  !
+  !***********************************************************
+  
+  TASK PERS bool RestartOK:=TRUE;
+  
+  !***********************************************************
+  !
+  ! Procedure main
+  !
+  !   This is the PickMaster MAIN routine.
+  !
+  !***********************************************************
+  PROC main()
+    RestartActive := FALSE;
+    InitSafeStop;
+    InitSpeed;
+    WaitForExeOrder;
+    %RoutineName%;
+  ERROR (PPA_RESTART)
+    IF (ERRNO = PPA_RESTART) THEN
+      RestartActive := TRUE;
+      ClearPath;
+      StorePath;
+      GotoRestartPos;
+      RestoPath;
+      StartMove;
+      restartActive := FALSE;
+      RETRY;
+    ENDIF
+  ENDPROC
+
+  !***********************************************************
+  !
+  ! Procedure InitSafeStop
+  !
+  !   This routine initiates the robot stop interrupt.
+  !
+  !***********************************************************
+  PROC InitSafeStop()
+    ForceStopProcess:=FALSE;
+    IDelete SafeStopInt;
+    CONNECT SafeStopInt WITH SafeStopTrap;
+    IPers ForceStopProcess, SafeStopInt;
+    ! Initiate the cartesian safe position
+    SafePos:=CalcRobT(SafePosJoints, Gripper);
+  ENDPROC
+
+  !***********************************************************
+  !
+  ! Procedure InitTriggs
+  !
+  !   This routine sets the triggdata for the vacuum signals
+  !   for all used item sources.
+  !
+  !***********************************************************
+  PROC InitTriggs()
+    FOR i FROM 1 TO MaxNoSources DO
+      IF (ItmSrcData{i}.Used) THEN
+        SetTriggs i;
+      ENDIF
+    ENDFOR
+  ENDPROC
+
+  !***********************************************************
+  !
+  ! Procedure InitPickTune
+  !
+  !   This routine initiates the tuning interrupt.
+  !
+  !***********************************************************
+  PROC InitPickTune()
+    PickTune:=FALSE;
+    IDelete PickTuneInt;
+    CONNECT PickTuneInt WITH PickTuneTrap;
+    IPers PickTune, PickTuneInt;
+  ENDPROC
+
+  !***********************************************************
+  !
+  ! Procedure SetSimulatedDummyTriggs
+  !
+  !   Set up all trigg events used in the RAPID code that not is
+  !   relevant for simulated mode.
+  !   No need to change if the tool has 1 - 4 activators.
+  !
+  !***********************************************************
+  PROC SetSimulatedDummyTriggs(num Index)
+    TriggEquip ItmSrcData{Index}.VacuumAct1,0,ItmSrcData{Index}.VacActDelay\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.VacuumRev1,0,ItmSrcData{Index}.VacRevDelay\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.VacuumOff1,0,ItmSrcData{Index}.VacOffDelay\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.VacuumAct2,0,ItmSrcData{Index}.VacActDelay\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.VacuumRev2,0,ItmSrcData{Index}.VacRevDelay\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.VacuumOff2,0,ItmSrcData{Index}.VacOffDelay\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.VacuumAct3,0,ItmSrcData{Index}.VacActDelay\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.VacuumRev3,0,ItmSrcData{Index}.VacRevDelay\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.VacuumOff3,0,ItmSrcData{Index}.VacOffDelay\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.VacuumAct4,0,ItmSrcData{Index}.VacActDelay\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.VacuumRev4,0,ItmSrcData{Index}.VacRevDelay\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.VacuumOff4,0,ItmSrcData{Index}.VacOffDelay\GOp:=goDummySignal,0;
+  ENDPROC
+
+  !***********************************************************
+  !
+  ! Procedure SetSimulatedTriggs
+  !
+  !   Offline version of SetTriggs.
+  !   No need to change if the tool has 1 - 2 activators.
+  !
+  !***********************************************************
+  PROC SetSimulatedTriggs(num Index)
+    ! 
+    ! Setup all tool events for simulated mode:
+	! SimAttachX: Attach a nearby item to tool activator X.
+	! SimDetachX: Drop the item held by tool activator X.
+    !
+    TEST ItmSrcData{Index}.SourceType
+    CASE PICK_TYPE:
+      TriggEquip ItmSrcData{Index}.SimAttach1,0,0\GOp:=goVacBlow1,1;
+      TriggEquip ItmSrcData{Index}.SimAttach2,0,0\GOp:=goVacBlow2,1;
+!      TriggEquip ItmSrcData{Index}.SimAttach3,0,0\GOp:=goVacBlow3,1;
+!      TriggEquip ItmSrcData{Index}.SimAttach4,0,0\GOp:=goVacBlow4,1;
+    CASE PLACE_TYPE:
+      TriggEquip ItmSrcData{Index}.SimDetach1,0,0\GOp:=goVacBlow1,2;
+      TriggEquip ItmSrcData{Index}.SimDetach2,0,0\GOp:=goVacBlow2,2;
+!      TriggEquip ItmSrcData{Index}.SimDetach3,0,0\GOp:=goVacBlow3,2;
+!      TriggEquip ItmSrcData{Index}.SimDetach4,0,0\GOp:=goVacBlow4,2;
+    ENDTEST
+	SetSimulatedDummyTriggs(Index);
+  ENDPROC
+
+  !***********************************************************
+  !
+  ! Procedure SetDummyTriggs
+  !
+  !   Set up all trigg events used in the RAPID code that not is
+  !   relevant for online mode.
+  !   No need to change if the tool has 1 - 4 activators.
+  !
+  !***********************************************************
+  PROC SetDummyTriggs(num Index)
+    TriggEquip ItmSrcData{Index}.SimAttach1,0,0\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.SimDetach1,0,0\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.SimAttach2,0,0\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.SimDetach2,0,0\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.SimAttach3,0,0\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.SimDetach3,0,0\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.SimAttach4,0,0\GOp:=goDummySignal,0;
+    TriggEquip ItmSrcData{Index}.SimDetach4,0,0\GOp:=goDummySignal,0;
+  ENDPROC
+
+  !***********************************************************
+  !
+  ! Procedure SetTriggs
+  !
+  !   This routine sets the triggdata (tool events) for the gripper.
+  !   Need to match the I/O interface of the gripper control.
+  !
+  !***********************************************************
+  PROC SetTriggs(num Index)
+    IF RobOS() THEN
+      ! 
+      ! Setup all tool events for online mode:
+	  ! VacuumActX: Turn on the vacuum for tool activator X.
+	  ! VacuumRevX: Reverse the vacuum (blow) for tool activator X.
+	  ! VacuumOffX: Turn off the vacuum for tool activator X.
+      !
+      TEST ItmSrcData{Index}.SourceType
+      CASE PICK_TYPE:
+        TriggEquip ItmSrcData{Index}.VacuumAct1,0,ItmSrcData{Index}.VacActDelay\GOp:=goVacBlow1,1;
+        TriggEquip ItmSrcData{Index}.VacuumAct2,0,ItmSrcData{Index}.VacActDelay\GOp:=goVacBlow2,1;
+      CASE PLACE_TYPE:
+        TriggEquip ItmSrcData{Index}.VacuumRev1,0,ItmSrcData{Index}.VacRevDelay\GOp:=goVacBlow1,2;
+        TriggEquip ItmSrcData{Index}.VacuumOff1,0,ItmSrcData{Index}.VacOffDelay\GOp:=goVacBlow1,0;
+        TriggEquip ItmSrcData{Index}.VacuumRev2,0,ItmSrcData{Index}.VacRevDelay\GOp:=goVacBlow2,2;
+        TriggEquip ItmSrcData{Index}.VacuumOff2,0,ItmSrcData{Index}.VacOffDelay\GOp:=goVacBlow2,0;
+      DEFAULT:
+        TriggEquip ItmSrcData{Index}.VacuumAct1,0,ItmSrcData{Index}.VacActDelay\GOp:=goVacBlow1,1;
+        TriggEquip ItmSrcData{Index}.VacuumRev1,0,ItmSrcData{Index}.VacRevDelay\GOp:=goVacBlow1,2;
+        TriggEquip ItmSrcData{Index}.VacuumOff1,0,ItmSrcData{Index}.VacOffDelay\GOp:=goVacBlow1,0;
+        TriggEquip ItmSrcData{Index}.VacuumAct2,0,ItmSrcData{Index}.VacActDelay\GOp:=goVacBlow2,1;
+        TriggEquip ItmSrcData{Index}.VacuumRev2,0,ItmSrcData{Index}.VacRevDelay\GOp:=goVacBlow2,2;
+        TriggEquip ItmSrcData{Index}.VacuumOff2,0,ItmSrcData{Index}.VacOffDelay\GOp:=goVacBlow2,0;
+      ENDTEST
+	  SetDummyTriggs(Index);
+    ELSE
+	  ! Simulated mode
+      SetSimulatedTriggs(Index);
+    ENDIF
+  ENDPROC
+
+  !***********************************************************
+  !
+  ! Procedure InitSpeed
+  !
+  !   This routine sets the speed limits. It may be changed
+  !   in different projects.
+  !
+  !***********************************************************
+  PROC InitSpeed()
+    MaxSpeed.v_tcp:=Vtcp;
+    LowSpeed.v_tcp:=Vtcp/3;
+    VeryLowSpeed.v_tcp:=250;
+    VelSet 100,10000;
+  ENDPROC
+
+  !***********************************************************
+  !
+  ! Procedure PickPlace
+  !
+  !   Initiate the final settings before starting the process
+  !   and specify the pick-place cycle.
+  !
+  !***********************************************************
+  PROC PickPlace()
+    ConfL\Off;
+    IF RestartOK = FALSE THEN
+      SystemStopAction \Halt;
+      RAISE PPA_RESTART;
+    ENDIF
+    MoveL SafePos,VeryLowSpeed,fine,Gripper\WObj:=wobj0;
+    SetGO goVacBlow1,0;
+    ResetAx4 ROB_ID;
+    NotifyRunning;
+    IF (FirstTime = TRUE) THEN
+      WaitTime 1;
+      FOR i FROM 1 TO MaxNoSources DO
+        IF (ItmSrcData{i}.Used) THEN
+          WaitTime 0.2;
+          QStartItmSrc ItmSrcData{i}.ItemSource;
+        ENDIF
+      ENDFOR
+      EnumerateWorkAreas;
+      InitTriggs;
+      InitPickTune;
+      PickRateInit;
+      FirstTime:=FALSE;
+      WaitTime 0.2;
+    ENDIF
+    WHILE TRUE DO
+      IF (StopProcess = TRUE) THEN
+        StopProcess:=FALSE;
+        SafeStop;
+      ENDIF
+      PickPlaceSeq;
+      IncrPicks;
+      IF (CheckAx4Rev() = FALSE) THEN
+        MoveL SafePos,MaxSpeed,fine,Gripper\WObj:=wobj0;
+        ResetAx4 ROB_ID;
+      ENDIF
+    ENDWHILE
+    ERROR
+      TEST ERRNO
+        CASE PPA_RESTART:
+          RAISE;
+      ENDTEST    
+  ENDPROC
+
+  !***********************************************************
+  !
+  ! Procedure SafeStop
+  !
+  !   This routine execute a movement to the SafeStop
+  !   position and resets some variables.
+  !
+  !***********************************************************
+  PROC SafeStop()
+    VAR string time;
+    VAR string date;
+    
+    IDelete SafeStopInt;
+    GotoRestartPos;
+    ResetAx4 ROB_ID;
+    StopProcess:=FALSE;
+    ForceStopProcess:=FALSE;
+    NotifySafeStop;
+    ExitCycle;
+  ENDPROC
+  
+  !***********************************************************
+  !
+  ! Procedure GotoRestartPos
+  !
+  !   This routine moves the robot to the SafePos and will
+  !   also acknowledge all item sources so the execution can
+  !   be restarted.
+  !
+  !***********************************************************
+  PROC GotoRestartPos()
+    VAR robtarget pCurrentPosition;
+    VAR jointtarget jointpos1;
+    
+    RestartOK:=TRUE;
+    pCurrentPosition:=CRobT(\Tool:=tool0\WObj:=wobj0);
+    jointpos1:=CalcJointT(pCurrentPosition,tool0\WObj:=wobj0);
+    IF RestartOK = TRUE THEN
+      FOR i FROM 1 TO MaxNoSources DO
+        IF (ItmSrcData{i}.Used) THEN
+          TriggL SafePos,VeryLowSpeed,ItmSrcData{i}.Nack,fine,Gripper\WObj:=wobj0;
+        ENDIF
+      ENDFOR
+      SetGO goVacBlow1,0;
+    ENDIF
+    
+    ERROR
+      IF ERRNO = ERR_ROBLIMIT THEN
+        ErrWrite "Robot is outside working range",RobName()+" must be jogged inside working range.";
+        RestartOK:=FALSE;
+        TRYNEXT;
+      ELSE
+        RAISE;
+      ENDIF
+  ENDPROC 
+
+  !**********************************************************
+  !
+  ! Trap SafeStopTrap
+  !
+  !   This trap will run the SafeStop routine.
+  !
+  !**********************************************************
+  TRAP SafeStopTrap
+    IF (ForceStopProcess = TRUE) THEN
+      ForceStopProcess:=FALSE;
+      ClearPath;
+      StorePath;
+      SafeStop;
+      RestoPath;
+      StartMove;
+    ENDIF
+  ENDTRAP
+
+  !**********************************************************
+  !
+  ! Trap PickTuneTrap
+  !
+  !   This trap sets the tune datas.
+  !
+  !**********************************************************
+  TRAP PickTuneTrap
+    IF (PickTune = TRUE) THEN
+   PickTune:=FALSE;
+   TEST TuneType
+   CASE SPEED_TUNE:
+     MaxSpeed.v_tcp:=Vtcp;
+     LowSpeed.v_tcp:=Vtcp/3;
+   CASE PICKPLACE_TUNE:
+     IF (ItmSrcData{SourceIndex}.Used) THEN
+       IF (ItmSrcData{SourceIndex}.SourceType = PICK_TYPE) THEN
+         ItmSrcData{SourceIndex}.VacActDelay:=VacActDelay;
+       ELSEIF (ItmSrcData{SourceIndex}.SourceType = PLACE_TYPE) THEN
+         ItmSrcData{SourceIndex}.VacRevDelay:=VacRevDelay;        
+         ItmSrcData{SourceIndex}.VacOffDelay:=VacOffDelay;        
+       ELSE
+         ItmSrcData{SourceIndex}.VacActDelay:=VacActDelay;
+         ItmSrcData{SourceIndex}.VacRevDelay:=VacRevDelay;        
+         ItmSrcData{SourceIndex}.VacOffDelay:=VacOffDelay;        
+       ENDIF
+       IF (ItmSrcData{SourceIndex}.TrackPoint.Type = fllwtime) THEN
+         ItmSrcData{SourceIndex}.TrackPoint.followtime:=FollowTime;
+       ELSEIF (ItmSrcData{SourceIndex}.TrackPoint.Type = stoptime) THEN
+         ItmSrcData{SourceIndex}.TrackPoint.stoptime:=FollowTime;
+       ENDIF
+       ItmSrcData{SourceIndex}.OffsZ:=OffsZ;
+       SetTriggs SourceIndex;
+     ELSE
+       ErrWrite "Tune not possible ","The workarea index "+ValToStr(SourceIndex)+" is an unused index";
+     ENDIF
+   ENDTEST
+ ENDIF
+  ENDTRAP
+  
+ENDMODULE
+
+MODULE PPASERVICE
+  !***********************************************************
+  !
+  ! Module: PPASERVICE
+  !
+  ! Description
+  !   This program module includes all service modules
+  !   that i able to run from PickMaster.
+  !   All service routine names and service variable should 
+  !   be inserted in the persistant variables to be
+  !   recognized by PickMaster.
+  !
+  !***********************************************************
+
+  TASK PERS string ServiceRoutine1:="Home";
+  TASK PERS string ServiceRoutine2:="WashDown";
+  TASK PERS string ServiceRoutine3:="TestCycle";
+  TASK PERS string ServiceRoutine4:="Homepos";
+  TASK PERS string ServiceRoutine5:="";
+  TASK PERS string ServiceRoutine6:="";
+  TASK PERS string ServiceRoutine7:="";
+  TASK PERS string ServiceRoutine8:="";
+  TASK PERS string ServiceRoutine9:="";
+  TASK PERS string ServiceRoutine10:="";
+  
+  TASK PERS string ServiceVar1:="ServVar1";
+  TASK PERS string ServiceVar2:="ServVar2";
+  TASK PERS string ServiceVar3:="ServVar3";
+  TASK PERS string ServiceVar4:="";
+  TASK PERS string ServiceVar5:="";
+  TASK PERS string ServiceVar6:="";
+  TASK PERS string ServiceVar7:="";
+  TASK PERS string ServiceVar8:="";
+  TASK PERS string ServiceVar9:="";
+  TASK PERS string ServiceVar10:="";
+  
+  TASK PERS num ServVar1:=0;
+  TASK PERS num ServVar2:=0;
+  TASK PERS num ServVar3:=0;
+
+  !***********************************************************
+  !
+  ! Procedure Home
+  !
+  !   Service routine
+  !
+  !***********************************************************
+  PROC Home()
+    MoveL SafePos,VeryLowSpeed,fine,Gripper\WObj:=wobj0;
+    TPWrite "Home Routine executed";
+    ExitCycle;
+  ENDPROC
+
+  !***********************************************************
+  !
+  ! Procedure WashDown
+  !
+  !   Service routine
+  !
+  !***********************************************************
+  PROC WashDown()
+    TPWrite "WashDown Routine executed";
+    ExitCycle;
+  ENDPROC
+
+  !***********************************************************
+  !
+  ! Procedure TestCycle
+  !
+  !   Service routine
+  !
+  !***********************************************************
+  PROC TestCycle()
+    TPWrite "TestCycle Routine executed";
+    ExitCycle;
+  ENDPROC
+
+  !***********************************************************
+  !
+  ! Procedure Homepos
+  !
+  !   Service routine
+  !
+  !***********************************************************
+  PROC Homepos()
+    MoveAbsJ [[-11,-11,-11,0,0,0],[0,0,0,0,0,0]]\NoEOffs,VeryLowSpeed,fine,Gripper\WObj:=wobj0;
+    ExitCycle;
+  ENDPROC
+
+ENDMODULE
+
+MODULE PPAEXECUTING
+  !***********************************************************
+  !
+  ! Module: PPAEXECUTING
+  !
+  ! Description
+  !   This program module executes all movements when the
+  !   process is running.
+  !   Edit this module to customize the project.
+  !
+  !***********************************************************
+
+  VAR num PickWorkArea{MaxNoSources};
+  VAR num PlaceWorkArea{MaxNoSources};
+  VAR num OtherWorkArea{MaxNoSources};
+
+  ! Definition of the item targets, are temporarely used in the pick and place routines.
+  VAR itmtgt PickTarget;
+  VAR itmtgt PlaceTarget;
+  TASK PERS wobjdata WObjPick:=[FALSE,TRUE,"",[[0,0,0],[1,0,0,0]],[[0,0,0],[1,0,0,0]]];
+  TASK PERS wobjdata WObjPlace:=[FALSE,TRUE,"",[[0,0,0],[1,0,0,0]],[[0,0,0],[1,0,0,0]]];
+  
+  ! Safe/stop position. Given as joint angles.
+  TASK PERS jointtarget SafePosJoints:=[[-11,-11,-11,0,0,0],[0,0,0,0,0,0]];
+  ! Cartesian safe/stop position. Calculated from SafePosJoints and Gripper.
+  TASK PERS robtarget SafePos:=[[0,0,-870],[0,-1,0,0],[0,0,0,0],[0,0,0,0,0,0]];
+
+  ! Set the payload for the items which is picked.
+  TASK PERS loaddata ItemLoad:=[0.001,[0,0,0.001],[1,0,0,0],0,0,0];
+
+ 
+  !***********************************************************
+  !
+  ! Procedure EnumerateWorkAreas
+  !
+  !   Enumerate all work areas.
+  !
+  !   PickWorkArea{1} becomes the pick work area with the lowest selection index.
+  !   PickWorkArea{2} becomes the pick work area with the second lowest selection index.
+  !   etc.
+  !
+  !   PlaceWorkArea{1} becomes the place work area with the lowest selection index.
+  !   PlaceWorkArea{2} is the place work area with the second lowest selection index.
+  !   etc.
+  !
+  !   OtherWorkArea{1} becomes the place work area with the lowest selection index.
+  !   OtherWorkArea{2} becomes the place work area with the second lowest selection index.
+  !   etc.
+  !
+  !***********************************************************
+  PROC EnumerateWorkAreas()
+    VAR num PickNumber:=1;
+    VAR num PlaceNumber:=1;
+    VAR num OtherNumber:=1;
+
+    FOR i FROM 1 TO MaxNoSources DO
+      IF (ItmSrcData{i}.Used) THEN
+        IF (ItmSrcData{i}.SourceType = PICK_TYPE) THEN
+          PickWorkArea{PickNumber}:=i;
+          Incr PickNumber;
+        ELSEIF (ItmSrcData{i}.SourceType = PLACE_TYPE) THEN
+          PlaceWorkArea{PlaceNumber}:=i;
+          Incr PlaceNumber;
+        ELSE
+          OtherWorkArea{OtherNumber}:=i;
+          Incr OtherNumber;
+        ENDIF
+      ENDIF
+    ENDFOR
+  ENDPROC
+
+  !***********************************************************
+  !
+  ! Procedure PickPlaceSeq
+  !
+  !   The Pick and Place sequence. 
+  !   Edit this routine to modify from which work areas to pick and place. 
+  !   Needs to be changed if more than one pick work area is used.
+  !   Needs to be changed if more than one place work area is used.
+  !
+  !***********************************************************
+  PROC PickPlaceSeq()
+    Pick PickWorkArea{1};
+!    Pick PickWorkArea{2};
+    Place PlaceWorkArea{1};
+!    Place PlaceWorkArea{2};
+  ENDPROC
+  
+  !***********************************************************
+  !
+  ! Procedure Pick
+  !
+  !   Executes a pick movement.
+  !   Edit this routine to modify how the robot shall 
+  !   execute the pick movements.
+  !   Needs to be changed if more than one activator is used.
+  !
+  !***********************************************************
+  PROC Pick(num Index)
+      IF Index > 0 THEN
+          WObjPick:=ItmSrcData{Index}.Wobj;
+          GetItmTgt ItmSrcData{Index}.ItemSource,PickTarget;
+          TriggL\Conc,RelTool(PickTarget.RobTgt,0,0,-ItmSrcData{Index}.OffsZ),MaxSpeed,ItmSrcData{Index}.VacuumAct1,z20,PickAct1\WObj:=WObjPick;
+          TriggL\Conc,PickTarget.RobTgt,LowSpeed,ItmSrcData{Index}.SimAttach1,z5\Inpos:=ItmSrcData{Index}.TrackPoint,PickAct1\WObj:=WObjPick;
+          GripLoad ItemLoad;
+          TriggL RelTool(PickTarget.RobTgt,0,0,-ItmSrcData{Index}.OffsZ),LowSpeed,ItmSrcData{Index}.Ack,z20,PickAct1\WObj:=WObjPick;
+      ELSE
+          ErrWrite "Missing item distribution", "Cannot pick because no item distribution contains current work area." \RL2:="Please check configuration";
+       SafeStop;
+      ENDIF
+  ENDPROC
+
+  !***********************************************************
+  !
+  ! Procedure Place
+  !
+  !   Executes a place movement.
+  !   Edit this routine to modify how the robot shall 
+  !   execute the place movements.
+  !   Needs to be changed if more than one activator is used.
+  !
+  !***********************************************************
+  PROC Place(num Index)
+    IF Index > 0 THEN
+        WObjPlace:=ItmSrcData{Index}.Wobj;
+        GetItmTgt ItmSrcData{Index}.ItemSource,PlaceTarget;
+        MoveL\Conc,RelTool(PlaceTarget.RobTgt,0,0,-ItmSrcData{Index}.OffsZ),MaxSpeed,z20,PickAct1\WObj:=WObjPlace;
+        TriggL\Conc,PlaceTarget.RobTgt,LowSpeed,ItmSrcData{Index}.VacuumRev1\T2:=ItmSrcData{Index}.VacuumOff1\T3:=ItmSrcData{Index}.SimDetach1,z5\Inpos:=ItmSrcData{Index}.TrackPoint,PickAct1\WObj:=WObjPlace;
+        GripLoad load0;
+        TriggL RelTool(PlaceTarget.RobTgt,0,0,-ItmSrcData{Index}.OffsZ),LowSpeed,ItmSrcData{Index}.Ack,z20,PickAct1\WObj:=WObjPlace;
+    ELSE
+        ErrWrite "Missing item distribution", "Cannot place because no item distribution contains current work area." \RL2:="Please check configuration";
+        SafeStop;
+    ENDIF
+  ENDPROC
+
+ENDMODULE
